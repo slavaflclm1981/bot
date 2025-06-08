@@ -23,8 +23,17 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(message)s",
-        stream=sys.stdout
+        filename="bot.log",
+        filemode="a",
+        encoding="utf-8"
     )
+    # Если хочешь видеть логи и в консоли:
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] %(message)s")
+    console.setFormatter(formatter)
+    logging.getLogger().addHandler(console)
+
     logging.getLogger('aiogram').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -430,6 +439,12 @@ async def send_offer_command(message: types.Message, state: FSMContext):
     if not is_offer_allowed():
         await message.answer("Подача предложений временно недоступна.")
         return
+    # --- Ограничение по времени и праздникам ---
+    if not is_working_day_and_hours():
+        await message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.")
+        await state.clear()
+        return
+    # --- конец проверки ---
     if is_registered(message.from_user.id):
         await state.set_state(Form.offer_metal)
         await message.answer(
