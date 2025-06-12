@@ -23,17 +23,8 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(message)s",
-        filename="bot.log",
-        filemode="a",
-        encoding="utf-8"
+        stream=sys.stdout
     )
-    # Если хочешь видеть логи и в консоли:
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter("[%(asctime)s] %(message)s")
-    console.setFormatter(formatter)
-    logging.getLogger().addHandler(console)
-
     logging.getLogger('aiogram').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
@@ -246,6 +237,13 @@ async def send_timeout_notification(user_id: int, deadline: datetime):
                 sheet = gold_sheet if second_metal == "Золото" else silver_sheet
                 sheet.append_row([user_id, user_data["name"], user_data["org"], user_data["org_type"], timestamp, "Время вышло"])
                 log_event("QUOTE", user_data, f"Время вышло | Предоставлена только котировка для {data['metal']}")
+            # --- Убираем клавиатуру ---
+            try:
+                last_msg_id = data.get("last_inline_msg_id")
+                if last_msg_id:
+                    await bot.edit_message_reply_markup(chat_id=user_id, message_id=last_msg_id, reply_markup=None)
+            except Exception:
+                pass
             await state.update_data(timeout=True)
             try:
                 last_msg_id = data.get("last_inline_msg_id")
@@ -326,8 +324,8 @@ def validate_contacts(text: str) -> tuple[bool, str]:
 def validate_quote(text: str) -> tuple[bool, str]:
     try:
         quote = float(text.replace(",", "."))
-        if not -100 <= quote <= 100:
-            return False, "Котировка должна быть между -100 и 100"
+        if not -10 <= quote <= 10:
+            return False, "Котировка должна быть между -10 и 10"
         return True, ""
     except ValueError:
         return False, "Введите число (например: 1,5 или -0,5)"
@@ -413,11 +411,12 @@ async def send_scheduled_notifications():
                         if user_data:
                             log_event("NOTIFY", user_data,
                                       f"Текст: Уведомление отправлено | Время ответа: {response_time} мин")
-                        await bot.send_message(
+                        msg = await bot.send_message(
                             chat_id=user_id,
                             text=f"{record['Текст запроса'].strip()}\n\n⏱ На предоставление котировок даётся {response_time} минут",
                             reply_markup=get_notification_inline_kb()
                         )
+                        await state.update_data(last_inline_msg_id=msg.message_id)
                     except Exception as e:
                         log_event("ERROR", None, f"Ошибка отправки user_id={user_id}: {e}")
     except Exception as e:
@@ -439,12 +438,6 @@ async def send_offer_command(message: types.Message, state: FSMContext):
     if not is_offer_allowed():
         await message.answer("Подача предложений временно недоступна.")
         return
-    # --- Ограничение по времени и праздникам ---
-    if not is_working_day_and_hours():
-        await message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.")
-        await state.clear()
-        return
-    # --- конец проверки ---
     if is_registered(message.from_user.id):
         await state.set_state(Form.offer_metal)
         await message.answer(
@@ -759,11 +752,11 @@ async def callback_send_quotes(callback: types.CallbackQuery, state: FSMContext)
         await callback.message.answer("⌛ Время для предоставления котировок вышло!")
         return
     await callback.message.edit_reply_markup(reply_markup=None)
-    await state.update_data(last_inline_msg_id=callback.message.message_id)
-    await callback.message.answer(
+    msg = await callback.message.answer(
         "Выберите, пожалуйста, первый металл для предоставления котировок. Котировку по второму металлу можно будет не отправлять.",
         reply_markup=get_metals_inline_kb(with_cancel=False)
     )
+    await state.update_data(last_inline_msg_id=msg.message_id)
     await state.set_state(Form.quote_metal)
 
 @dp.callback_query(F.data == "decline_quotes")
