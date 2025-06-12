@@ -111,8 +111,8 @@ def offers_today_count(user_id, metal):
             continue
     return count
 
-TOKEN = "7776660810:AAE4YZm4JkZYsUdWZcngEdwz0SajINcgTas"
-GOOGLE_SHEET_NAME = "Данные из бота"
+TOKEN = "__________"
+GOOGLE_SHEET_NAME = "_____"
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME = "Пользователи"
 chat_id = '-4787764944'
