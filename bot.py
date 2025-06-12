@@ -17,20 +17,29 @@ import logging
 import os
 import sys
 
-RU_HOLIDAYS = holidays.RU(years=[2025,2026,2027])  # можно добавить нужные года
+RU_HOLIDAYS = holidays.RU(years=[2025,2026,2027])
 
 def setup_logging():
+    log_format = "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+    log_file = "bot.log"
     logging.basicConfig(
         level=logging.INFO,
-        format="[%(asctime)s] %(message)s",
-        stream=sys.stdout
+        format=log_format,
+        stream=sys.stdout,
+        force=True,
     )
+    root_logger = logging.getLogger()
+    if not any(isinstance(h, logging.FileHandler) for h in root_logger.handlers):
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(logging.Formatter(log_format))
+        root_logger.addHandler(file_handler)
     logging.getLogger('aiogram').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
 setup_logging()
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("bot")
 
 def log_event(event_type: str, user_data: dict = None, details: str = ""):
     org_info = ""
@@ -50,13 +59,13 @@ def get_main_inline_kb(offers_allowed=True):
 def get_reg_inline_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Регистрация", callback_data="registration")]
+            [InlineKeyboardButton(text="🪪Регистрация", callback_data="registration")]
         ]
     )
 
 def get_metals_inline_kb(with_cancel=True):
     kb = [
-        [InlineKeyboardButton(text="Золото", callback_data="metal_gold"), InlineKeyboardButton(text="Серебро", callback_data="metal_silver")]
+        [InlineKeyboardButton(text="Золото 🟡", callback_data="metal_gold"), InlineKeyboardButton(text="Серебро ⚪", callback_data="metal_silver")]
     ]
     if with_cancel:
         kb.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_offer")])
@@ -65,25 +74,25 @@ def get_metals_inline_kb(with_cancel=True):
 def get_notification_inline_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📈 Отправить котировки", callback_data="send_quotes")],
-            [InlineKeyboardButton(text="🚫 Не отправлять котировки", callback_data="decline_quotes")]
+            [InlineKeyboardButton(text="📨 Отправить уровень премии/дисконта", callback_data="send_quotes")],
+            [InlineKeyboardButton(text="🚫 Не отправлять", callback_data="decline_quotes")]
         ]
     )
 
 def get_org_type_inline_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Банк РФ", callback_data="orgtype_Банк РФ")],
-            [InlineKeyboardButton(text="Организация в РФ", callback_data="orgtype_Организация в РФ")],
-            [InlineKeyboardButton(text="Организация из ЕАЭС", callback_data="orgtype_Организация из ЕАЭС")],
-            [InlineKeyboardButton(text="Организация вне ЕАЭС", callback_data="orgtype_Организация вне ЕАЭС")],
+            [InlineKeyboardButton(text="Банк РФ 🇷🇺💰", callback_data="orgtype_Банк РФ")],
+            [InlineKeyboardButton(text="Организация в РФ 🇷🇺🏫", callback_data="orgtype_Организация в РФ")],
+            [InlineKeyboardButton(text="Организация из ЕАЭС🤝", callback_data="orgtype_Организация из ЕАЭС")],
+            [InlineKeyboardButton(text="Организация вне ЕАЭС🌏", callback_data="orgtype_Организация вне ЕАЭС")],
         ]
     )
 
 def get_skip_inline_kb():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Не указывать", callback_data="skip_contacts")]
+            [InlineKeyboardButton(text="❌Не указывать", callback_data="skip_contacts")]
         ]
     )
 
@@ -93,26 +102,27 @@ def get_yes_no_inline_kb():
             [InlineKeyboardButton(text="Да", callback_data="yes_second_metal"), InlineKeyboardButton(text="Нет", callback_data="no_second_metal")]
         ]
     )
-    
-def offers_today_count(user_id, metal):
-    """Возвращает количество предложений пользователя по металлу на сегодня."""
+ 
+
+def offers_today_count(user_id, metal):# Возвращает количество предложений пользователя по металлу на сегодня
+
     today = datetime.now().date()
     all_offers = offers_sheet.get_all_records()
     count = 0
     for row in all_offers:
         try:
             if str(row.get("ID Telegram", "")) == str(user_id) and row.get("Металл", "") == metal:
-                date_str = str(row.get("Дата", "")).strip()  # Укажи точно, как называется столбец с датой!
+                date_str = str(row.get("Дата", "")).strip()  
                 if date_str:
                     row_date = datetime.strptime(date_str.split()[0], "%d.%m.%Y").date()
                     if row_date == today:
-                        count += 1
+                        count += 1 # Не больше 2 предожений в день по 1 металлу
         except Exception:
             continue
     return count
 
-TOKEN = "__________"
-GOOGLE_SHEET_NAME = "_____"
+TOKEN = "___________"
+GOOGLE_SHEET_NAME = "_____________"
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME = "Пользователи"
 chat_id = '-4787764944'
@@ -187,11 +197,11 @@ def is_working_day_and_hours():
     msk_tz = pytz.timezone("Europe/Moscow")
     now = datetime.now(msk_tz)
     today = now.date()
-    # Будний день?
+    # Проверка на будний день
     is_weekday = now.weekday() < 6  # 1-пн, 5-пт
-    # Не праздник?
+    # Проверка на праздник
     is_not_holiday = today not in RU_HOLIDAYS
-    # Время рабочее?
+    # Проверка на рабочее время
     working_time = time(9, 0) <= now.time() <= time(23, 0)
     return is_weekday and is_not_holiday and working_time   
 
@@ -231,13 +241,12 @@ async def send_timeout_notification(user_id: int, deadline: datetime):
                 second_metal = data['second_metal']
                 sheet = gold_sheet if second_metal == "Золото" else silver_sheet
                 sheet.append_row([user_id, user_data["name"], user_data["org"], user_data["org_type"], timestamp, "Время вышло"])
-                log_event("QUOTE", user_data, f"Время вышло | Не предоставлена котировка для {second_metal}")
+                log_event("QUOTE", user_data, f"Время вышло | Не предоставлена котировка на {second_metal}")
             elif 'quote_value' in data and 'second_metal' not in data:
                 second_metal = "Серебро" if data['metal'] == "Золото" else "Золото"
                 sheet = gold_sheet if second_metal == "Золото" else silver_sheet
                 sheet.append_row([user_id, user_data["name"], user_data["org"], user_data["org_type"], timestamp, "Время вышло"])
-                log_event("QUOTE", user_data, f"Время вышло | Предоставлена только котировка для {data['metal']}")
-            # --- Убираем клавиатуру ---
+                log_event("QUOTE", user_data, f"Время вышло | Предоставлена только котировка на {data['metal']}")
             try:
                 last_msg_id = data.get("last_inline_msg_id")
                 if last_msg_id:
@@ -253,7 +262,7 @@ async def send_timeout_notification(user_id: int, deadline: datetime):
                 pass
             await bot.send_message(
                 chat_id=user_id,
-                text="⌛ Время вышло!"
+                text="⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿"
             )
             await clear_state_safely(user_id, state)
     except asyncio.CancelledError:
@@ -302,7 +311,7 @@ def validate_name(text: str) -> tuple[bool, str]:
     if len(text) < 3 or len(text) > 25:
         return False, "Длина имени должна быть от 3 до 25 символов"
     if not re.fullmatch(r'^[а-яА-ЯёЁa-zA-Z\s-]+$', text):
-        return False, "Можно использовать только буквы, пробелы и дефис"
+        return False, "Можно использовать только буквы, пробелы"
     return True, ""
 
 def validate_org(text: str) -> tuple[bool, str]:
@@ -377,7 +386,7 @@ async def send_scheduled_notifications():
                 for user_id in users_to_notify:
                     try:
                         user_id = int(user_id)
-                        # === Текстовое уведомление ===
+                        # Текстовое уведомление
                         if notification_type == "текст":
                             await bot.send_message(
                                 chat_id=user_id,
@@ -388,13 +397,13 @@ async def send_scheduled_notifications():
                                 log_event("NOTIFY", user_data,
                                           f"Текст: Текстовое уведомление отправлено")
                             continue
-                        # === Котировка ===
+                        # Запрос котировка 
                         # Корректная обработка времени ответа:
                         response_time_str = str(record.get("Время ответа", "")).strip()
                         if response_time_str.isdigit():
                             response_time = int(response_time_str)
                         else:
-                            response_time = 15  # Значение по умолчанию
+                            response_time = 30   # если не указано время в гуглтаблице, то по умолчанию 30 минут
                         state = dp.fsm.resolve_context(bot, chat_id=user_id, user_id=user_id)
                         if user_id in active_timers:
                             active_timers[user_id].cancel()
@@ -413,7 +422,7 @@ async def send_scheduled_notifications():
                                       f"Текст: Уведомление отправлено | Время ответа: {response_time} мин")
                         msg = await bot.send_message(
                             chat_id=user_id,
-                            text=f"{record['Текст запроса'].strip()}\n\n⏱ На предоставление котировок даётся {response_time} минут",
+                            text=f"{record['Текст запроса'].strip()}\n\n⏱ На предоставление котировок даётся {response_time} минут❗❗❗",
                             reply_markup=get_notification_inline_kb()
                         )
                         await state.update_data(last_inline_msg_id=msg.message_id)
@@ -436,7 +445,7 @@ async def cmd_start(message: types.Message):
 @dp.message(Command("send_offer"))
 async def send_offer_command(message: types.Message, state: FSMContext):
     if not is_offer_allowed():
-        await message.answer("Подача предложений временно недоступна.")
+        await message.answer("Подача предложений временно приостановлена.")
         return
     if is_registered(message.from_user.id):
         await state.set_state(Form.offer_metal)
@@ -446,21 +455,21 @@ async def send_offer_command(message: types.Message, state: FSMContext):
         )
     else:
         await message.answer(
-            "Для подачи предложения нужно пройти регистрацию.",
+            "🪪Для подачи предложения нужно пройти регистрацию.",
             reply_markup=get_reg_inline_kb()
         )
 
 @dp.message(Command("help"))
 async def help_command(message: types.Message):
     await message.answer(
-        "По возникшим вопросам просьба обращаться в Отдел сопровождения продаж готовой продукции по телефону +7 812 334-36-64."
+        "По возникшим вопросам просьба обращаться в Отдел сопровождения продаж готовой продукции по телефону +7 812 334-36-64. Для перезагрузки бота воспользуйтесь командой /start"
     )
 
 @dp.callback_query(F.data == "help_menu")
 async def help_menu_callback(callback: types.CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "По возникшим вопросам просьба обращаться в Отдел сопровождения продаж готовой продукции по телефону +7 812 334-36-64."
+        "По возникшим вопросам просьба обращаться в Отдел сопровождения продаж готовой продукции по телефону +7 812 334-36-64. Для перезагрузки бота воспользуйтесь командой /start"
     )
 
 @dp.callback_query(F.data == "registration")
@@ -472,7 +481,7 @@ async def callback_registration(callback: types.CallbackQuery, state: FSMContext
     await callback.message.edit_reply_markup(reply_markup=None)
     await state.set_state(Form.name)
     await callback.message.answer(
-        "Введите, пожалуйста, Ваше имя (только буквы и дефис, 3-25 символов):"
+        "🕵️Введите, пожалуйста, Ваше имя (только буквы, 3-25 символов):"
     )
 
 @dp.message(Form.name)
@@ -484,7 +493,7 @@ async def process_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
     await state.set_state(Form.organization)
     await message.answer(
-        "Спасибо! Теперь введите, пожалуйста, название Вашей организации (3-25 символов, можно использовать цифры и знаки препинания):"
+        "🏢Спасибо! Теперь введите, пожалуйста, название Вашей организации (3-25 символов, можно использовать цифры и знаки препинания):"
     )
 
 @dp.message(Form.organization)
@@ -507,7 +516,7 @@ async def process_org_type_cb(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(org_type=org_type)
     await state.set_state(Form.contacts)
     await callback.message.answer(
-        "Оставьте, пожалуйста, Ваши контакты (телефон/почта) или нажмите «Не указывать»:",
+        "📞📧Оставьте, пожалуйста, Ваши контакты (телефон/почта) или нажмите «Не указывать»:",
         reply_markup=get_skip_inline_kb()
     )
 
@@ -531,7 +540,7 @@ async def skip_contacts_cb(callback: types.CallbackQuery, state: FSMContext):
     }
     log_event("REGISTER", user_data, "Новая регистрация пользователя")
     await clear_state_safely(callback.from_user.id, state)
-    await callback.message.answer("✅ Отлично, регистрация завершена! Теперь вы можете направлять запросы о покупке драгоценных металлов.")
+    await callback.message.answer("✅🎉 Отлично, регистрация завершена! Теперь вы можете направлять запросы о покупке драгоценных металлов и отвечать на наши запросы о предоставлении уровня дисконта и премии.")
 
 @dp.message(Form.contacts)
 async def process_contacts(message: types.Message, state: FSMContext):
@@ -559,14 +568,14 @@ async def process_contacts(message: types.Message, state: FSMContext):
     }
     log_event("REGISTER", user_data, "Новая регистрация пользователя")
     await clear_state_safely(message.from_user.id, state)
-    await message.answer("✅ Отлично, регистрация завершена! Теперь вы можете направлять запросы о покупке драгоценных металлов.")
+    await message.answer("✅🎉Отлично, регистрация завершена! Теперь вы можете направлять запросы о покупке драгоценных металлов и отвечать на наши запросы о предоставлении уровня дисконта и премии.")
 
-# --- Подача предложения о покупке ---
+#  Подача предложения о покупке 
 @dp.callback_query(Form.offer_metal, lambda call: call.data in ["metal_gold", "metal_silver"])
 async def process_offer_metal_cb(callback: types.CallbackQuery, state: FSMContext):
     if not is_working_day_and_hours():
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.")
+        await callback.message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.😿")
         await state.clear()
         return
     metal = "Золото" if callback.data == "metal_gold" else "Серебро"
@@ -576,7 +585,7 @@ async def process_offer_metal_cb(callback: types.CallbackQuery, state: FSMContex
     if count >= 2:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer(
-            f"❌ Вы уже отправили 2 предложения по металлу {metal} сегодня. Новое предложение можно будет отправить завтра."
+            f"❌ Вы уже отправили 2 предложения по металлу {metal} сегодня. Новое предложение можно будет отправить завтра.😿"
         )
         await state.clear()
         return
@@ -593,7 +602,7 @@ async def process_offer_metal_cb(callback: types.CallbackQuery, state: FSMContex
 async def callback_start_offer(callback: types.CallbackQuery, state: FSMContext):
     if not is_offer_allowed():
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("Подача предложений временно недоступна.")
+        await callback.message.answer("Подача предложений временно недоступна.😿")
         return
     # --- Ограничение по времени ---
     if not is_working_day_and_hours():
@@ -623,7 +632,7 @@ async def cancel_offer_cb(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(reply_markup=None)
     await clear_state_safely(callback.from_user.id, state)
     await callback.message.answer(
-        "❌ Очень жаль, что вы отказались предоставить предложение. Хорошего Вам дня"
+        "😿Очень жаль, что вы отказались предоставить предложение. Желаем Вам хорошего Вам дня. 🤝"
     )
 
 @dp.message(Form.offer_quantity)
@@ -638,7 +647,7 @@ async def process_offer_quantity(message: types.Message, state: FSMContext):
         return
     if quantity < 10 or quantity > 10000:
         await message.answer(
-            "❌ Количество должно быть не меньше 10 и не больше 10 000 кг. Попробуйте снова:",
+            "❌ Масса должна быть не меньше 10 и не больше 10 000 кг. Попробуйте снова:",
             parse_mode="HTML"
         )
         return
@@ -646,7 +655,7 @@ async def process_offer_quantity(message: types.Message, state: FSMContext):
     await state.update_data(quantity=quantity)
     await state.set_state(Form.offer_quote)
     await message.answer(
-        "Введите, пожалуйста, котировку в % (в случае премии число без знаков, например, <code>1.5</code> , а в случае дисконта с минусом <code>-0.5</code>):",
+        "Введите, пожалуйста, значение в % (в случае премии число без знаков, например, <code>1.5</code> , а в случае дисконта с минусом <code>-0.5</code>):",
         parse_mode="HTML"
     )
 
@@ -673,9 +682,9 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
         try:
             if (
                 str(row.get("ID Telegram", "")) == str(message.from_user.id)
-                and str(row.get("Металл", "")) == metal  # сравнение по металлу
+                and str(row.get("Металл", "")) == metal  
             ):
-                date_str = str(row.get("Дата", "")).strip()  # или "Дата и время"
+                date_str = str(row.get("Дата", "")).strip()  
                 if date_str:
                     row_date = datetime.strptime(date_str.split()[0], "%d.%m.%Y").date()
                     if row_date == today:
@@ -683,7 +692,7 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
         except Exception:
             continue
     if len(user_offers_today) >= 2:
-        await message.answer(f"❌ Вы уже отправили 2 предложения по металлу {metal} сегодня. Новое предложение можно будет отправить завтра.")
+        await message.answer(f"❌ Вы уже отправили 2 предложения на {metal} сегодня. Новое предложение на {metal} можно будет отправить завтра.")
         await state.clear()
         return
 
@@ -707,7 +716,7 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
               f"Металл: {data['metal']} | Масса: {data['quantity']}кг | Котировка: {quote}%")
     await state.clear()
     await message.answer(
-        f"✅ Спасибо! Ваше предложение принято:\n"
+        f"✅ Спасибо! Ваше предложение принято к рассмотрению:\n"
         f"• Металл: {data['metal']}\n"
         f"• Масса: {data['quantity']} кг\n"
         f"• Котировка: {quote}%"
@@ -726,13 +735,12 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
     except Exception as e:
         print(f"Ошибка при отправке в группу: {e}")
 
-# --- Ответ на уведомление (котировки), только gold/silver, никаких сообщений в группу! ---
 @dp.callback_query(Form.quote_metal, lambda call: call.data in ["metal_gold", "metal_silver"])
 async def process_quote_metal_cb(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     if data.get("timeout"):
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("⌛ Время для предоставления котировок вышло!")
+        await callback.message.answer("⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     await callback.message.edit_reply_markup(reply_markup=None)
     await state.update_data(last_inline_msg_id=callback.message.message_id)
@@ -740,7 +748,7 @@ async def process_quote_metal_cb(callback: types.CallbackQuery, state: FSMContex
     await state.update_data(metal=metal)
     await state.set_state(Form.quote_value)
     await callback.message.answer(
-        "Введите, пожалуйста, котировку в % (в случае премии число без знаков, например, <code>1.5</code>, а в случае дисконта с минусом <code>-0.5</code>):",
+        "Введите, пожалуйста, значение в % (в случае премии число без знаков, например, <code>1.5</code>, а в случае дисконта с минусом <code>-0.5</code>):",
         parse_mode="HTML"
     )
 
@@ -749,11 +757,11 @@ async def callback_send_quotes(callback: types.CallbackQuery, state: FSMContext)
     data = await state.get_data()
     if data.get("timeout"):
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("⌛ Время для предоставления котировок вышло!")
+        await callback.message.answer("⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     await callback.message.edit_reply_markup(reply_markup=None)
     msg = await callback.message.answer(
-        "Выберите, пожалуйста, первый металл для предоставления котировок. Котировку по второму металлу можно будет не отправлять.",
+        "Выберите, пожалуйста, первый металл для предоставления уровня дисконта/премии. Данные по второму металлу можно будет предоставить далее или не отправлять.",
         reply_markup=get_metals_inline_kb(with_cancel=False)
     )
     await state.update_data(last_inline_msg_id=msg.message_id)
@@ -764,7 +772,7 @@ async def callback_decline_quotes(callback: types.CallbackQuery, state: FSMConte
     data = await state.get_data()
     if data.get("timeout"):
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("⌛ Время для предоставления котировок вышло!")
+        await callback.message.answer("⌛Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     if callback.from_user.id in active_timers:
         active_timers[callback.from_user.id].cancel()
@@ -776,14 +784,14 @@ async def callback_decline_quotes(callback: types.CallbackQuery, state: FSMConte
     await callback.message.edit_reply_markup(reply_markup=None)
     await clear_state_safely(callback.from_user.id, state)
     await callback.message.answer(
-        "Очень жаль! Желаем Вам хорошего дня!"
+        "😿Очень жаль, что вы отказались предоставить предложение. Желаем Вам хорошего Вам дня. 🤝"
     )
 
 @dp.message(Form.quote_value)
 async def process_quote_value(message: types.Message, state: FSMContext):
     data = await state.get_data()
     if data.get("timeout"):
-        await message.answer("⌛ Время для предоставления котировок вышло!")
+        await message.answer("⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     await state.update_data(last_inline_msg_id=message.message_id)
     is_valid, error_msg = validate_quote(message.text)
@@ -809,14 +817,14 @@ async def process_quote_value(message: types.Message, state: FSMContext):
         second_metal = "Серебро" if current_metal == "Золото" else "Золото"
         await state.update_data(second_metal=second_metal)
         msg = await message.answer(
-            f"✅ Спасибо, котировка на {current_metal} сохранена!\n"
-            f"Хотите отправить котировку на {second_metal}?",
+            f"✅ Спасибо, данные на {current_metal} сохранены!\n"
+            f"Хотите отправить уровень на {second_metal}?",
             reply_markup=get_yes_no_inline_kb()
         )
         await state.update_data(last_inline_msg_id=msg.message_id)
         await state.set_state(Form.quote_second_metal)
     else:
-        await message.answer("✅ Спасибо! Обе котировки сохранены! Хорошего Вам дня!")
+        await message.answer("✅ Спасибо за предоставление информации! Хорошего Вам дня!")
         await clear_state_safely(message.from_user.id, state)
 
 @dp.callback_query(F.data == "yes_second_metal")
@@ -824,13 +832,13 @@ async def yes_second_metal_cb(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     if data.get("timeout"):
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("⌛ Время для предоставления котировок вышло!")
+        await callback.message.answer("⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     await callback.message.edit_reply_markup(reply_markup=None)
     await state.update_data(last_inline_msg_id=callback.message.message_id)
     second_metal = data.get('second_metal')
     await callback.message.answer(
-        f"Введите котировку для {second_metal} в %:",
+        f"Введите, пожалуйста, уровень премии/дисконта на {second_metal} в %:",
         parse_mode="HTML"
     )
     await state.update_data(metal=second_metal)
@@ -841,13 +849,13 @@ async def no_second_metal_cb(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     if data.get("timeout"):
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("⌛ Время для предоставления котировок вышло!")
+        await callback.message.answer("⌛ Сожалеем, время для предоставления уровня дисконта/премии вышло!😿")
         return
     await callback.message.edit_reply_markup(reply_markup=None)
     second_metal = data.get('second_metal')
     user_data = get_user(callback.from_user.id)
     if user_data:
-        log_event("QUOTE", user_data, f"Отказ от предоставления котировки для {second_metal}")
+        log_event("QUOTE", user_data, f"Отказ от предоставления уровня для {second_metal}")
     sheet = gold_sheet if second_metal == "Золото" else silver_sheet
     sheet.append_row([
         callback.from_user.id,
@@ -858,7 +866,7 @@ async def no_second_metal_cb(callback: types.CallbackQuery, state: FSMContext):
         "Отказ от предоставления"
     ])
     await callback.message.answer(
-        "Спасибо за предоставленную котировку! Желаем хорошего дня!"
+        "🤝Спасибо за предоставленные данные! Желаем Вам хорошего дня!"
     )
     await clear_state_safely(callback.from_user.id, state)
 
