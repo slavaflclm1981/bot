@@ -122,7 +122,7 @@ def offers_today_count(user_id, metal):# Возвращает количеств
     return count
 
 TOKEN = "___________"
-GOOGLE_SHEET_NAME = "_____________"
+GOOGLE_SHEET_NAME = "__________"
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME = "Пользователи"
 chat_id = '-4787764944'
@@ -445,7 +445,10 @@ async def cmd_start(message: types.Message):
 @dp.message(Command("send_offer"))
 async def send_offer_command(message: types.Message, state: FSMContext):
     if not is_offer_allowed():
-        await message.answer("Подача предложений временно приостановлена.")
+        await message.answer("Подача предложений временно недоступна.")
+        return
+    if not is_working_day_and_hours():
+        await message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.😿")
         return
     if is_registered(message.from_user.id):
         await state.set_state(Form.offer_metal)
@@ -455,7 +458,7 @@ async def send_offer_command(message: types.Message, state: FSMContext):
         )
     else:
         await message.answer(
-            "🪪Для подачи предложения нужно пройти регистрацию.",
+            "Для подачи предложения нужно пройти регистрацию.",
             reply_markup=get_reg_inline_kb()
         )
 
@@ -607,7 +610,7 @@ async def callback_start_offer(callback: types.CallbackQuery, state: FSMContext)
     # --- Ограничение по времени ---
     if not is_working_day_and_hours():
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.")
+        await callback.message.answer("❌ Предложения принимаются только в рабочие дни (Пн–Пт, кроме праздников) и с 09:00 до 18:00 по Москве.😿")
         await state.clear()
         return
     # --- конец проверки ---
