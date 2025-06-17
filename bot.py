@@ -121,8 +121,8 @@ def offers_today_count(user_id, metal):# Возвращает количеств
             continue
     return count
 
-TOKEN = "___________"
-GOOGLE_SHEET_NAME = "__________"
+TOKEN = "_________________"
+GOOGLE_SHEET_NAME = "_______"
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME = "Пользователи"
 chat_id = '-4787764944'
@@ -148,6 +148,8 @@ class Form(StatesGroup):
     offer_metal = State()
     offer_quantity = State()
     offer_quote = State()
+    offer_note = State()      
+    offer_confirm = State()    
     quote_metal = State()
     quote_value = State()
     quote_second_metal = State()
@@ -678,16 +680,16 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
         await state.clear()
         return
     today = datetime.now().date()
-    metal = data['metal']  # используем металл из state!
+    metal = data['metal']
     all_offers = offers_sheet.get_all_records()
     user_offers_today = []
     for row in all_offers:
         try:
             if (
                 str(row.get("ID Telegram", "")) == str(message.from_user.id)
-                and str(row.get("Металл", "")) == metal  
+                and str(row.get("Металл", "")) == metal
             ):
-                date_str = str(row.get("Дата", "")).strip()  
+                date_str = str(row.get("Дата", "")).strip()
                 if date_str:
                     row_date = datetime.strptime(date_str.split()[0], "%d.%m.%Y").date()
                     if row_date == today:
@@ -698,31 +700,72 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
         await message.answer(f"❌ Вы уже отправили 2 предложения на {metal} сегодня. Новое предложение на {metal} можно будет отправить завтра.")
         await state.clear()
         return
+    # Сохраняем котировку и переходим к вводу примечания
+    await state.update_data(quote=quote)
+    await state.set_state(Form.offer_note)
+    await message.answer(
+        "Добавьте, пожалуйста, дополнение к предложению (например, сроки оплаты, место доставки и т.п., до 100 символов):"
+    )
 
-    records = users_sheet.get_all_records()
+@dp.message(Form.offer_note)
+async def process_offer_note(message: types.Message, state: FSMContext):
+    note = message.text.strip()
+    if len(note) > 100:
+        await message.answer("❌ Превышено ограничение! Дополнение должно быть не более 100 символов. Попробуйте снова:")
+        return
+    await state.update_data(note=note)
+    data = await state.get_data()
+    text = (
+        f"Проверьте данные перед отправкой:\n"
+        f"• Металл: {data['metal']}\n"
+        f"• Масса: {data['quantity']} кг\n"
+        f"• Котировка: {data['quote']}%\n"
+        f"• Примечание: {note if note else '—'}"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Отправить", callback_data="offer_send"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_offer")
+            ]
+        ]
+    )
+    msg = await message.answer(text, reply_markup=kb)
+    await state.update_data(last_inline_msg_id=msg.message_id)
+    await state.set_state(Form.offer_confirm)
+
+@dp.callback_query(Form.offer_confirm, F.data == "offer_send")
+async def process_offer_send(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_reply_markup(reply_markup=None)
+    data = await state.get_data()
+    user_data = get_user(callback.from_user.id)
     contacts = "Не указаны"
+    records = users_sheet.get_all_records()
     for user in records:
-        if str(user["ID Telegram"]) == str(message.from_user.id):
+        if str(user["ID Telegram"]) == str(callback.from_user.id):
             contacts = user.get("Контакты", "Не указаны")
             break
+    # Запись в Google Sheets с учётом столбца Примечание
     offers_sheet.append_row([
-        message.from_user.id,
+        callback.from_user.id,
         user_data["name"],
         user_data["org"],
         user_data["org_type"],
         datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
         data['metal'],
         data['quantity'],
-        quote
+        data['quote'],
+        data.get('note', '')
     ])
-    log_event("OFFER", user_data, 
-              f"Металл: {data['metal']} | Масса: {data['quantity']}кг | Котировка: {quote}%")
+    log_event("OFFER", user_data,
+              f"Металл: {data['metal']} | Масса: {data['quantity']}кг | Котировка: {data['quote']}% | Примечание: {data.get('note', '')}")
     await state.clear()
-    await message.answer(
+    await callback.message.answer(
         f"✅ Спасибо! Ваше предложение принято к рассмотрению:\n"
         f"• Металл: {data['metal']}\n"
         f"• Масса: {data['quantity']} кг\n"
-        f"• Котировка: {quote}%"
+        f"• Котировка: {data['quote']}%\n"
+        f"• Примечание: {data.get('note', '') if data.get('note', '') else '—'}"
     )
     try:
         await bot.send_message(
@@ -732,7 +775,8 @@ async def process_offer_quote(message: types.Message, state: FSMContext):
                  f"• Контакты: {contacts}\n"
                  f"• Металл: {data['metal']}\n"
                  f"• Масса: {data['quantity']} кг\n"
-                 f"• Котировка: {quote}%",
+                 f"• Котировка: {data['quote']}%\n"
+                 f"• Примечание: {data.get('note', '') if data.get('note', '') else '—'}",
             parse_mode="HTML"
         )
     except Exception as e:
